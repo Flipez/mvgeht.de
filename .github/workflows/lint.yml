@@ -5,7 +5,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
+    - uses: pnpm/action-setup@v4
+      with:
+        version: 10
     - name: Install modules
-      run: npm install
+      run: pnpm install
     - name: Run ESLint
-      run: npm run lint
+      run: pnpm run lint

@@ -1,10 +1,12 @@
 package main
 
 import (
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"slices"
@@ -12,11 +14,14 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 )
 
 const redisStreamName = "mvg-events"
+
+var db driver.Conn
 
 type Departure struct {
 	PlannedDepartureTime  int    `json:"plannedDepartureTime"`
@@ -39,9 +44,40 @@ func main() {
 	}
 	go eb.redisEventProcessor(ctx)
 
+	db = connectClickhouse()
+
+	http.HandleFunc("/line_delay", lineDelayHandler)
 	http.HandleFunc("/events", eb.sseHandler)
 	log.Println("Server started on 127.0.0.1:8080")
 	log.Fatal(http.ListenAndServe("127.0.0.1:8080", nil))
+
+}
+
+func lineDelayHandler(w http.ResponseWriter, r *http.Request) {
+	dateStr := r.URL.Query().Get("date")
+	isSouth := r.URL.Query().Get("south")
+	interval := r.URL.Query().Get("interval")
+	realtime := r.URL.Query().Get("realtime")
+	label := r.URL.Query().Get("label")
+	if dateStr == "" {
+		http.Error(w, "Missing date parameter", http.StatusBadRequest)
+		return
+	}
+
+	results := getDelayForLine(interval, dateStr, label, isSouth, realtime, db)
+
+	var writer io.Writer = w
+	gz := gzip.NewWriter(w)
+	defer gz.Close()
+	writer = gz
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Content-Encoding", "gzip")
+	if err := json.NewEncoder(writer).Encode(results); err != nil {
+		http.Error(w, "Error encoding JSON: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
 }
 
 func filterAndDedup(departures []Departure) []Departure {

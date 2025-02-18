@@ -48,7 +48,7 @@ const resources = {
       Misc: {
         Delay: "delay",
         Departed: "departed",
-        SecondsShort: "Sec"
+        SecondsShort: "Sec",
       },
     },
   },
@@ -94,7 +94,7 @@ const resources = {
       Misc: {
         Delay: "Verspätung",
         Departed: "abgefahren",
-        SecondsShort: "Sek"
+        SecondsShort: "Sek",
       },
     },
   },
